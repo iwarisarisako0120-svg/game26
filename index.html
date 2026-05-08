@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>草原のシマエナガたたき</title>
+    <style>
+        :root {
+            --sky-top: #87ceeb;
+            --sky-bottom: #e0f7fa;
+            --grass-light: #aed581;
+            --grass-dark: #7cb342;
+            --bird-white: #ffffff;
+            --blush: #ffcdd2;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent; /* タップ時の青い枠を消す */
+            user-select: none; /* テキスト選択を防止 */
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(to bottom, var(--sky-top) 0%, var(--sky-bottom) 40%, var(--grass-light) 40%, var(--grass-dark) 100%);
+            font-family: 'Hiragino Sans', 'Helvetica Neue', sans-serif;
+            overflow: hidden;
+            touch-action: none; /* スクロールやズームを防止 */
+        }
+
+        /* 装飾用の草花 */
+        .deco {
+            position: absolute;
+            bottom: 5%;
+            font-size: 24px;
+            opacity: 0.5;
+            white-space: nowrap;
+            width: 100%;
+            text-align: center;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        #ui { 
+            text-align: center; 
+            margin-bottom: 5vh; 
+            z-index: 10; 
+            width: 90%;
+        }
+
+        .score-box {
+            background: rgba(255, 255, 255, 0.85);
+            padding: 15px;
+            border-radius: 25px;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+        }
+
+        .score { font-size: 28px; font-weight: bold; color: #5d4037; margin: 0; }
+        .timer { font-size: 18px; color: #e53935; font-weight: bold; margin-top: 5px; }
+
+        #game-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 28vw);
+            grid-template-rows: repeat(3, 28vw);
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px;
+            border-radius: 30px;
+            z-index: 5;
+            max-width: 400px;
+            max-height: 400px;
+        }
+
+        .hole {
+            background-color: #5d4037;
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 8px 10px rgba(0,0,0,0.5);
+        }
+
+        .shimaenaga {
+            width: 85%;
+            height: 85%;
+            background-color: var(--bird-white);
+            border-radius: 50% 50% 48% 48%;
+            position: absolute;
+            bottom: -100%;
+            left: 7.5%;
+            transition: bottom 0.12s cubic-bezier(0.17, 0.89, 0.32, 1.3);
+            box-shadow: 0 0 10px 2px white;
+            z-index: 6;
+        }
+
+        /* 顔のディテール */
+        .eyes { position: absolute; top: 35%; width: 100%; display: flex; justify-content: center; gap: 25%; }
+        .eye { width: 8%; height: 10%; background: #222; border-radius: 50%; position: relative; }
+        .beak { position: absolute; top: 48%; left: 50%; transform: translateX(-50%); width: 10%; height: 8%; background: #333; clip-path: polygon(0% 0%, 100% 0%, 50% 100%); }
+        .blush { position: absolute; top: 52%; width: 100%; display: flex; justify-content: center; gap: 45%; }
+        .cheek { width: 15%; height: 8%; background: var(--blush); border-radius: 50%; }
+
+        .shimaenaga.up { bottom: 10%; }
+        .shimaenaga.hit .eye { height: 2px; margin-top: 4px; }
+
+        #start-btn {
+            margin-top: 5vh;
+            padding: 15px 50px;
+            font-size: 20px;
+            background: #ff8a65;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-weight: bold;
+            box-shadow: 0 5px #e64a19;
+            cursor: pointer;
+        }
+
+        .rush-text {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 40px;
+            color: #d32f2f;
+            font-weight: bold;
+            opacity: 0;
+            z-index: 100;
+            text-shadow: 2px 2px 0 white;
+            pointer-events: none;
+        }
+
+        .show-rush { animation: rush-anim 1s forwards; }
+        @keyframes rush-anim {
+            0% { opacity: 0; scale: 0.5; }
+            50% { opacity: 1; scale: 1.2; }
+            100% { opacity: 0; scale: 1.5; }
+        }
+
+        /* スマホの向き警告 */
+        @media (orientation: landscape) and (max-height: 500px) {
+            body::after {
+                content: "画面を縦にしてあそんでね！";
+                position: fixed;
+                top: 0; left: 0; width: 100%; height: 100%;
+                background: var(--grass-dark);
+                color: white;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 999;
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div class="score-box">
+            <p class="score">スコア: <span id="score">0</span></p>
+            <p class="timer" id="timer-text">のこり: <span id="time">30</span>びょう</p>
+        </div>
+        <button id="start-btn">スタート！</button>
+    </div>
+
+    <div id="game-grid">
+        <!-- 9つ分の穴を作成 -->
+        <script>
+            for(let i=0; i<9; i++) {
+                document.write(`
+                    <div class="hole">
+                        <div class="shimaenaga">
+                            <div class="eyes"><div class="eye"></div><div class="eye"></div></div>
+                            <div class="beak"></div>
+                            <div class="blush"><div class="cheek"></div><div class="cheek"></div></div>
+                        </div>
+                    </div>
+                `);
+            }
+        </script>
+    </div>
+
+    <div class="deco">☘️ 🌼 ☘️ 🌼 ☘️ 🌼 ☘️</div>
+    <div id="rush-label" class="rush-text">ラストスパート！！</div>
+
+    <script>
+        const birds = document.querySelectorAll('.shimaenaga');
+        const scoreBoard = document.querySelector('#score');
+        const timeBoard = document.querySelector('#time');
+        const startBtn = document.querySelector('#start-btn');
+        const timerText = document.querySelector('#timer-text');
+        const rushLabel = document.querySelector('#rush-label');
+        
+        let lastHole, timeUp = false, score = 0, countdown, isRush = false;
+
+        function randomTime(min, max) { return Math.round(Math.random() * (max - min) + min); }
+
+        function randomHole() {
+            const idx = Math.floor(Math.random() * birds.length);
+            const hole = birds[idx];
+            if (hole === lastHole) return randomHole();
+            lastHole = hole;
+            return hole;
+        }
+
+        function peep() {
+            const time = isRush ? randomTime(300, 600) : randomTime(600, 1000);
+            const bird = randomHole();
+            bird.classList.add('up');
+
+            setTimeout(() => {
+                bird.classList.remove('up');
+                if (!timeUp) peep();
+            }, time);
+
+            if (isRush && Math.random() > 0.5) {
+                setTimeout(() => {
+                    if (!timeUp) {
+                        const extra = randomHole();
+                        extra.classList.add('up');
+                        setTimeout(() => extra.classList.remove('up'), time);
+                    }
+                }, 200);
+            }
+        }
+
+        function startGame() {
+            score = 0;
+            scoreBoard.textContent = 0;
+            timeUp = false;
+            isRush = false;
+            startBtn.style.visibility = 'hidden';
+            timerText.style.color = '#e53935';
+            
+            let timeLeft = 30;
+            timeBoard.textContent = timeLeft;
+
+            peep();
+
+            countdown = setInterval(() => {
+                timeLeft--;
+                timeBoard.textContent = timeLeft;
+
+                if (timeLeft === 10) {
+                    isRush = true;
+                    timerText.style.color = '#ffeb3b';
+                    rushLabel.classList.add('show-rush');
+                    setTimeout(() => rushLabel.classList.remove('show-rush'), 1000);
+                }
+
+                if (timeLeft <= 0) {
+                    clearInterval(countdown);
+                    timeUp = true;
+                    alert('おしまい！\nスコアは ' + score + '点 でした！');
+                    startBtn.style.visibility = 'visible';
+                }
+            }, 1000);
+        }
+
+        function bonk(e) {
+            e.preventDefault(); // ダブルタップズーム防止
+            if(!this.classList.contains('up') || this.classList.contains('hit')) return;
+            
+            score++;
+            scoreBoard.textContent = score;
+            this.classList.add('hit');
+            
+            setTimeout(() => {
+                this.classList.remove('up');
+                setTimeout(() => this.classList.remove('hit'), 200);
+            }, 100);
+        }
+
+        // スマホ用とPC用両方のイベント登録
+        birds.forEach(bird => {
+            bird.addEventListener('touchstart', bonk);
+            bird.addEventListener('mousedown', bonk);
+        });
+
+        startBtn.addEventListener('click', startGame);
+
+        // iOSのスクロールバウンス防止
+        document.addEventListener('touchmove', (e) => {
+            if (e.target.closest('#game-grid')) e.preventDefault();
+        }, { passive: false });
+    </script>
+</body>
+</html>
